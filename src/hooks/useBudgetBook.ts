@@ -15,14 +15,15 @@ const initialTransactions: Transaction[] = [
 
 const makeBudget = (yearMonth: string): MonthlyBudget => ({
   yearMonth,
-  payday: 1,
   totalIncome: 3000000,
   allocations: { livingExpensePercent: 50, savingsPercent: 30, customPercent: 20 },
 });
 
 export function useBudgetBook() {
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
-  const [budgets, setBudgets] = useState<Record<string, MonthlyBudget>>({ [currentMonth]: makeBudget(currentMonth) });
+  const [budgets, setBudgets] = useState<Record<string, MonthlyBudget>>({});
+  const [lastPayday, setLastPayday] = useState(1);
+  const [lastTotalIncome, setLastTotalIncome] = useState(3000000);
 
   const saveTransaction = (transaction: Transaction) => {
     setTransactions((current) => {
@@ -33,9 +34,17 @@ export function useBudgetBook() {
 
   const removeTransaction = (id: string) => setTransactions((current) => current.filter((item) => item.id !== id));
 
-  const getBudget = (yearMonth: string) => budgets[yearMonth] ?? makeBudget(yearMonth);
+  const getBudget = (yearMonth: string) => ({
+    ...budgets[yearMonth] ?? makeBudget(yearMonth),
+    payday: budgets[yearMonth]?.payday ?? lastPayday,
+    totalIncome: budgets[yearMonth]?.totalIncome ?? lastTotalIncome,
+  });
 
-  const saveBudget = (budget: MonthlyBudget) => setBudgets((current) => ({ ...current, [budget.yearMonth]: budget }));
+  const saveBudget = (budget: MonthlyBudget) => {
+    setLastPayday(budget.payday ?? lastPayday);
+    setLastTotalIncome(budget.totalIncome);
+    setBudgets((current) => ({ ...current, [budget.yearMonth]: budget }));
+  };
 
   const transactionsByMonth = useMemo(() => transactions, [transactions]);
 

@@ -1,6 +1,6 @@
 export interface MonthlyBudget {
   yearMonth: string;
-  payday: number;
+  payday?: number;
   totalIncome: number;
   allocations: {
     livingExpensePercent: number;
