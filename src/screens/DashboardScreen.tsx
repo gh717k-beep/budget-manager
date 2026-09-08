@@ -36,6 +36,12 @@ export default function DashboardScreen() {
   const dayTransactions = transactions.filter((item) => item.date === selectedDate);
   const spent = sumTransactionsInRange(transactions, 'EXPENSE', payCycle.start, payCycle.end);
   const amounts = getBudgetAmounts(budget);
+  const todayString = toDateString(new Date());
+  const isTodayInPayCycle = todayString >= payCycle.start && todayString <= payCycle.end;
+  const budgetDays = isTodayInPayCycle
+    ? getDatesInRange(todayString, payCycle.end).length
+    : getDatesInRange(payCycle.start, payCycle.end).length;
+  const dailyBudget = (isTodayInPayCycle ? Math.max(amounts.living - spent, 0) : amounts.living) / Math.max(budgetDays, 1);
   const days = cycleDates;
 
   const changeMonth = (amount: number) => {
@@ -100,7 +106,7 @@ export default function DashboardScreen() {
       <ScrollView contentContainerStyle={appStyles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.top}><MonthHeader yearMonth={yearMonth} /></View>
         <Animated.View {...cardSwipeResponder.panHandlers} style={{ transform: [{ translateX: cardTranslateX }] }}>
-          <BudgetCard target={amounts.living} spent={spent} onPress={openBudget} />
+          <BudgetCard target={amounts.living} spent={spent} dailyBudget={dailyBudget} onPress={openBudget} />
         </Animated.View>
         <View style={styles.summaryRow}>
           <Summary label="월 수입" value={budget.totalIncome} color={Palette.blue} />
