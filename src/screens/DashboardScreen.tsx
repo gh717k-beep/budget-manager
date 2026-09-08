@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Palette } from '@/constants/colors';
@@ -16,6 +16,13 @@ import { appStyles } from '@/styles/theme';
 const today = new Date();
 const initialMonth = toYearMonth(today);
 const initialDate = toDateString(today);
+const getPreferredDate = (yearMonth: string, payday: number) => {
+  const cycle = getPayCycle(yearMonth, payday);
+  const firstOfMonth = `${yearMonth}-01`;
+  if (initialDate >= cycle.start && initialDate <= cycle.end) return initialDate;
+  if (firstOfMonth >= cycle.start && firstOfMonth <= cycle.end) return firstOfMonth;
+  return cycle.start;
+};
 
 type ModalMode = 'transaction' | 'budget' | null;
 
@@ -24,11 +31,12 @@ export default function DashboardScreen() {
   const { width } = useWindowDimensions();
   const cardTranslateX = useRef(new Animated.Value(0)).current;
   const isCardAnimating = useRef(false);
+  const daysScrollRef = useRef<ScrollView>(null);
   const [yearMonth, setYearMonth] = useState(initialMonth);
-  const [selectedDate, setSelectedDate] = useState(initialDate);
+  const [budget, setBudget] = useState<MonthlyBudget>(() => getBudget(initialMonth));
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [editing, setEditing] = useState<Transaction | null>(null);
-  const [budget, setBudget] = useState<MonthlyBudget>(() => getBudget(initialMonth));
+  const [selectedDate, setSelectedDate] = useState(getPreferredDate(initialMonth, budget.payday ?? 1));
 
   const payCycle = getPayCycle(yearMonth, budget.payday ?? 1);
   const cycleDates = useMemo(() => getDatesInRange(payCycle.start, payCycle.end), [payCycle.start, payCycle.end]);
@@ -41,14 +49,23 @@ export default function DashboardScreen() {
   const budgetDays = isTodayInPayCycle
     ? getDatesInRange(todayString, payCycle.end).length
     : getDatesInRange(payCycle.start, payCycle.end).length;
-  const dailyBudget = (isTodayInPayCycle ? Math.max(amounts.living - spent, 0) : amounts.living) / Math.max(budgetDays, 1);
+  const dailyBudget = Math.max(amounts.living - spent, 0) / Math.max(budgetDays, 1);
   const days = cycleDates;
+
+  useEffect(() => {
+    const preferredDate = getPreferredDate(yearMonth, budget.payday ?? 1);
+    const preferredIndex = days.indexOf(preferredDate);
+    setSelectedDate(preferredDate);
+    if (preferredIndex >= 0) {
+      requestAnimationFrame(() => daysScrollRef.current?.scrollTo({ x: Math.max(preferredIndex * 66 - 24, 0), animated: true }));
+    }
+  }, [budget.payday, days, yearMonth]);
 
   const changeMonth = (amount: number) => {
     const nextMonth = shiftMonth(yearMonth, amount);
-    setYearMonth(nextMonth);
     const nextBudget = getBudget(nextMonth);
-    setSelectedDate(getPayCycle(nextMonth, nextBudget.payday ?? 1).start);
+    setYearMonth(nextMonth);
+    setSelectedDate(getPreferredDate(nextMonth, nextBudget.payday ?? 1));
     setBudget(nextBudget);
   };
 
@@ -114,14 +131,14 @@ export default function DashboardScreen() {
           <Summary label="저금" value={amounts.savings} color={Palette.amber} />
         </View>
         <View style={styles.sectionHeader}><Text style={appStyles.sectionTitle}>날짜별 기록</Text><Text style={appStyles.muted}>{monthTransactions.length}건</Text></View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daysRow}>
-          {days.map((date) => { const active = date === selectedDate; const dateObject = new Date(`${date}T00:00:00`); const day = dateObject.getDate(); const dayOfWeek = dateObject.getDay(); const dayTransactions = transactions.filter((item) => item.date === date); const dayExpense = dayTransactions.filter((item) => item.type === 'EXPENSE').reduce((sum, item) => sum + item.amount, 0); const dayIncome = dayTransactions.filter((item) => item.type === 'INCOME').reduce((sum, item) => sum + item.amount, 0); const weekendColor = dayOfWeek === 0 ? Palette.coral : dayOfWeek === 6 ? Palette.blue : Palette.ink; return <Pressable key={date} onPress={() => setSelectedDate(date)} style={[styles.day, active && styles.activeDay, { width: 58, height: 70 }]}><View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 2 }}><Text style={[{ color: Palette.muted, fontSize: 9, fontWeight: '700' }, active && styles.activeText]}>{dateObject.getMonth() + 1}.</Text><Text style={[styles.dayNumber, { color: weekendColor }, active && styles.activeText]}>{day}</Text></View><View style={{ alignItems: 'center', marginTop: 2 }}>{dayExpense > 0 && <Text style={[{ color: Palette.coral, fontSize: 8, lineHeight: 10 }, active && styles.activeText]}>-{dayExpense.toLocaleString('ko-KR')}</Text>}{dayIncome > 0 && <Text style={[{ color: Palette.blue, fontSize: 8, lineHeight: 10 }, active && styles.activeText]}>+{dayIncome.toLocaleString('ko-KR')}</Text>}</View></Pressable>; })}
+        <ScrollView ref={daysScrollRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daysRow}>
+          {days.map((date) => { const active = date === selectedDate; const isToday = date === initialDate; const dateObject = new Date(`${date}T00:00:00`); const day = dateObject.getDate(); const dayOfWeek = dateObject.getDay(); const dayTransactions = transactions.filter((item) => item.date === date); const dayExpense = dayTransactions.filter((item) => item.type === 'EXPENSE').reduce((sum, item) => sum + item.amount, 0); const dayIncome = dayTransactions.filter((item) => item.type === 'INCOME').reduce((sum, item) => sum + item.amount, 0); const weekendColor = dayOfWeek === 0 ? Palette.coral : dayOfWeek === 6 ? Palette.blue : Palette.ink; return <Pressable key={date} onPress={() => setSelectedDate(date)} style={[styles.day, active && styles.activeDay, isToday && { borderColor: Palette.coral, borderWidth: 2 }, { width: 58, height: 70 }]}><View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 2 }}><Text style={[{ color: Palette.muted, fontSize: 9, fontWeight: '700' }, active && styles.activeText]}>{dateObject.getMonth() + 1}.</Text><Text style={[styles.dayNumber, { color: weekendColor }, active && styles.activeText]}>{day}</Text></View><View style={{ alignItems: 'center', marginTop: 2 }}>{dayExpense > 0 && <Text style={[{ color: Palette.coral, fontSize: 8, lineHeight: 10 }, active && styles.activeText]}>-{dayExpense.toLocaleString('ko-KR')}</Text>}{dayIncome > 0 && <Text style={[{ color: Palette.blue, fontSize: 8, lineHeight: 10 }, active && styles.activeText]}>+{dayIncome.toLocaleString('ko-KR')}</Text>}</View></Pressable>; })}
         </ScrollView>
         <View style={styles.sectionHeader}><View><Text style={appStyles.sectionTitle}>{formatDateLabel(selectedDate)}</Text><Text style={appStyles.muted}>선택한 날짜의 수입과 지출</Text></View><Pressable onPress={openNewTransaction} style={styles.smallAdd}><Text style={styles.smallAddText}>+ 기록</Text></Pressable></View>
         <View style={styles.list}>{dayTransactions.length ? dayTransactions.map((item) => <TransactionItem key={item.id} transaction={item} onEdit={() => { setEditing(item); setModalMode('transaction'); }} onDelete={() => removeTransaction(item.id)} />) : <View style={styles.empty}><Text style={styles.emptyTitle}>아직 기록이 없어요</Text><Text style={appStyles.muted}>오늘의 소비를 한 줄 남겨보세요.</Text></View>}</View>
       </ScrollView>
       <Pressable onPress={openNewTransaction} style={styles.fab}><Text style={styles.fabText}>+</Text></Pressable>
-      <Modal visible={modalMode !== null} animationType="slide" transparent onRequestClose={closeModal}><View style={styles.modalBackdrop}><View style={styles.modal}>{modalMode === 'transaction' && editing && <TransactionForm value={editing} onChange={setEditing} onSave={() => { saveTransaction(editing); closeModal(); }} onClose={closeModal} />}{modalMode === 'budget' && <BudgetForm value={budget} onChange={setBudget} onSave={() => { saveBudget(budget); setSelectedDate(getPayCycle(yearMonth, budget.payday ?? 1).start); closeModal(); }} onClose={closeModal} />}</View></View></Modal>
+      <Modal visible={modalMode !== null} animationType="slide" transparent onRequestClose={closeModal}><View style={styles.modalBackdrop}><View style={styles.modal}>{modalMode === 'transaction' && editing && <TransactionForm value={editing} onChange={setEditing} onSave={() => { saveTransaction(editing); closeModal(); }} onClose={closeModal} />}{modalMode === 'budget' && <BudgetForm value={budget} onChange={setBudget} onSave={() => { saveBudget(budget); setSelectedDate(getPreferredDate(yearMonth, budget.payday ?? 1)); closeModal(); }} onClose={closeModal} />}</View></View></Modal>
     </SafeAreaView>
   );
 }
