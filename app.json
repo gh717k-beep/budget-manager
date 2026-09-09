@@ -11,6 +11,8 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.gh717.project1",
+      "permissions": ["POST_NOTIFICATIONS", "QUERY_ALL_PACKAGES"],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -37,6 +39,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "12b2a4b7-9086-4554-b39b-52e2b8f3600c"
+      }
     }
   }
 }

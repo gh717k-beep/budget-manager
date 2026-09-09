@@ -1,17 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Palette } from '@/constants/colors';
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '@/constants/categories';
-import { useBudgetBook } from '@/hooks/useBudgetBook';
 import { BudgetCard } from '@/components/BudgetCard';
 import { MonthHeader } from '@/components/MonthHeader';
 import { TransactionItem } from '@/components/TransactionItem';
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '@/constants/categories';
+import { Palette } from '@/constants/colors';
+import { useBudgetBook } from '@/hooks/useBudgetBook';
+import { appStyles } from '@/styles/theme';
 import { MonthlyBudget } from '@/types/budget';
 import { Transaction } from '@/types/transaction';
 import { formatCurrency, getBudgetAmounts, sumTransactionsInRange } from '@/utils/calculator';
 import { formatDateLabel, getDatesInRange, getPayCycle, shiftMonth, toDateString, toYearMonth } from '@/utils/dateUtils';
-import { appStyles } from '@/styles/theme';
+import { SymbolView } from 'expo-symbols';
+import { DeviceEventEmitter } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Easing, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const today = new Date();
 const initialMonth = toYearMonth(today);
@@ -27,7 +29,7 @@ const getPreferredDate = (yearMonth: string, payday: number) => {
 type ModalMode = 'transaction' | 'budget' | null;
 
 export default function DashboardScreen() {
-  const { transactions, saveTransaction, removeTransaction, getBudget, saveBudget } = useBudgetBook();
+  const { transactions, saveTransaction, removeTransaction, getBudget, saveBudget, reload } = useBudgetBook();
   const { width } = useWindowDimensions();
   const cardTranslateX = useRef(new Animated.Value(0)).current;
   const isCardAnimating = useRef(false);
@@ -38,10 +40,15 @@ export default function DashboardScreen() {
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [selectedDate, setSelectedDate] = useState(getPreferredDate(initialMonth, budget.payday ?? 1));
 
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener('budget-book-transactions-synced', reload);
+    return () => subscription.remove();
+  }, [reload]);
+
   const payCycle = getPayCycle(yearMonth, budget.payday ?? 1);
   const cycleDates = useMemo(() => getDatesInRange(payCycle.start, payCycle.end), [payCycle.start, payCycle.end]);
   const monthTransactions = transactions.filter((item) => item.date >= payCycle.start && item.date <= payCycle.end);
-  const dayTransactions = transactions.filter((item) => item.date === selectedDate);
+  const dayTransactions = transactions.filter((item) => item.date === selectedDate).sort((first, second) => second.id.localeCompare(first.id));
   const spent = sumTransactionsInRange(transactions, 'EXPENSE', payCycle.start, payCycle.end);
   const amounts = getBudgetAmounts(budget);
   const todayString = toDateString(new Date());
@@ -50,7 +57,7 @@ export default function DashboardScreen() {
     ? getDatesInRange(todayString, payCycle.end).length
     : getDatesInRange(payCycle.start, payCycle.end).length;
   const dailyBudget = Math.max(amounts.living - spent, 0) / Math.max(budgetDays, 1);
-  const days = cycleDates;
+  const days = useMemo(() => [...cycleDates].sort((first, second) => first.localeCompare(second)), [cycleDates]);
 
   useEffect(() => {
     const preferredDate = getPreferredDate(yearMonth, budget.payday ?? 1);
@@ -121,7 +128,21 @@ export default function DashboardScreen() {
   return (
     <SafeAreaView style={appStyles.screen}>
       <ScrollView contentContainerStyle={appStyles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.top}><MonthHeader yearMonth={yearMonth} /></View>
+        <View style={[styles.top, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+          <MonthHeader yearMonth={yearMonth} />
+          <Pressable
+            accessibilityLabel="데이터 새로고침"
+            hitSlop={10}
+            onPress={reload}
+            style={({ pressed }) => [{ width: 42, height: 42, alignItems: 'center', justifyContent: 'center', transform: [{ translateY: 2 }] }, pressed && { opacity: 0.6 }]}
+          >
+            <SymbolView
+              name={{ ios: 'arrow.clockwise', android: 'refresh', web: 'refresh' }}
+              size={24}
+              tintColor={Palette.ink}
+            />
+          </Pressable>
+        </View>
         <Animated.View {...cardSwipeResponder.panHandlers} style={{ transform: [{ translateX: cardTranslateX }] }}>
           <BudgetCard target={amounts.living} spent={spent} dailyBudget={dailyBudget} displayMode={budget.displayMode} onPress={openBudget} />
         </Animated.View>

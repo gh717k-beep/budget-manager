@@ -24,6 +24,7 @@ export function useBudgetBook() {
   const database = useSQLiteContext();
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
   const [budgets, setBudgets] = useState<Record<string, MonthlyBudget>>({});
+  const [reloadKey, setReloadKey] = useState(0);
   const [lastPayday, setLastPayday] = useState(1);
   const [lastTotalIncome, setLastTotalIncome] = useState(3000000);
   const [displayMode, setDisplayMode] = useState<MonthlyBudget['displayMode']>('remaining');
@@ -31,28 +32,30 @@ export function useBudgetBook() {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const transactionRows = await database.getAllAsync<{ id: string; date: string; type: Transaction['type']; amount: number; category_tag: string; note: string | null }>('SELECT id, date, type, amount, category_tag, note FROM transactions ORDER BY date DESC');
-      const budgetRows = await database.getAllAsync<{ year_month: string; payday: number | null; display_mode: MonthlyBudget['displayMode'] | null; total_income: number; living_percent: number; savings_percent: number; custom_percent: number }>('SELECT * FROM budgets');
-      const settings = await database.getAllAsync<{ key: string; value: string }>('SELECT key, value FROM settings');
-      if (cancelled) return;
-      if (transactionRows.length) {
-        setTransactions(transactionRows.map((row) => ({ id: row.id, date: row.date, type: row.type, amount: row.amount, categoryTag: row.category_tag, note: row.note ?? undefined })));
-      } else {
-        for (const transaction of initialTransactions) {
-          await database.runAsync('INSERT OR IGNORE INTO transactions (id, date, type, amount, category_tag, note) VALUES (?, ?, ?, ?, ?, ?)', transaction.id, transaction.date, transaction.type, transaction.amount, transaction.categoryTag, transaction.note ?? null);
+      try {
+        const transactionRows = await database.getAllAsync<{ id: string; date: string; type: Transaction['type']; amount: number; category_tag: string; note: string | null }>('SELECT id, date, type, amount, category_tag, note FROM transactions ORDER BY date DESC');
+        const budgetRows = await database.getAllAsync<{ year_month: string; payday: number | null; display_mode: MonthlyBudget['displayMode'] | null; total_income: number; living_percent: number; savings_percent: number; custom_percent: number }>('SELECT * FROM budgets');
+        const settings = await database.getAllAsync<{ key: string; value: string }>('SELECT key, value FROM settings');
+        if (cancelled) return;
+        if (transactionRows.length) {
+          setTransactions(transactionRows.map((row) => ({ id: row.id, date: row.date, type: row.type, amount: row.amount, categoryTag: row.category_tag, note: row.note ?? undefined })));
+        } else {
+          for (const transaction of initialTransactions) {
+            await database.runAsync('INSERT OR IGNORE INTO transactions (id, date, type, amount, category_tag, note) VALUES (?, ?, ?, ?, ?, ?)', transaction.id, transaction.date, transaction.type, transaction.amount, transaction.categoryTag, transaction.note ?? null);
+          }
         }
+        if (budgetRows.length) setBudgets(Object.fromEntries(budgetRows.map((row) => [row.year_month, { yearMonth: row.year_month, payday: row.payday ?? undefined, displayMode: row.display_mode ?? undefined, totalIncome: row.total_income, allocations: { livingExpensePercent: row.living_percent, savingsPercent: row.savings_percent, customPercent: row.custom_percent } }])));
+        const settingsMap = Object.fromEntries(settings.map((row) => [row.key, row.value]));
+        if (settingsMap.lastPayday) setLastPayday(Number(settingsMap.lastPayday));
+        if (settingsMap.lastTotalIncome) setLastTotalIncome(Number(settingsMap.lastTotalIncome));
+        if (settingsMap.displayMode) setDisplayMode(settingsMap.displayMode as MonthlyBudget['displayMode']);
+      } catch (error) {
+        console.warn('SQLite data load failed:', error);
       }
-      if (budgetRows.length) {
-        setBudgets(Object.fromEntries(budgetRows.map((row) => [row.year_month, { yearMonth: row.year_month, payday: row.payday ?? undefined, displayMode: row.display_mode ?? undefined, totalIncome: row.total_income, allocations: { livingExpensePercent: row.living_percent, savingsPercent: row.savings_percent, customPercent: row.custom_percent } }])));
-      }
-      const settingsMap = Object.fromEntries(settings.map((row) => [row.key, row.value]));
-      if (settingsMap.lastPayday) setLastPayday(Number(settingsMap.lastPayday));
-      if (settingsMap.lastTotalIncome) setLastTotalIncome(Number(settingsMap.lastTotalIncome));
-      if (settingsMap.displayMode) setDisplayMode(settingsMap.displayMode as MonthlyBudget['displayMode']);
     };
     void load();
     return () => { cancelled = true; };
-  }, [database]);
+  }, [database, reloadKey]);
 
   const saveTransaction = (transaction: Transaction) => {
     setTransactions((current) => {
@@ -82,5 +85,7 @@ export function useBudgetBook() {
     void database.runAsync('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', 'displayMode', budget.displayMode ?? displayMode ?? 'remaining');
   };
 
-  return { transactions, saveTransaction, removeTransaction, getBudget, saveBudget };
+  const reload = () => setReloadKey((current) => current + 1);
+
+  return { transactions, saveTransaction, removeTransaction, getBudget, saveBudget, reload };
 }

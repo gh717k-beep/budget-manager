@@ -1,5 +1,18 @@
 # Welcome to your Expo app 👋
 
+## Android 금융 알림 자동 기록
+
+이 기능은 Expo Go에서 동작하지 않으며 Android Development Build가 필요합니다. Expo SDK 57은 React Native 0.86을 사용하므로 Node.js 22.13 이상 환경에서 아래 명령을 실행하세요.
+
+```bash
+npx expo install @react-native-async-storage/async-storage
+npx expo run:android
+```
+
+앱 설치 후 `앱 선택` 탭에서 금융 앱을 켜고 `알림 로그` 탭의 `권한 설정`에서 Project1의 알림 접근 권한을 허용해야 합니다. Android의 알림 접근 권한은 일반 런타임 권한이 아니므로 `app.json`의 `POST_NOTIFICATIONS`만으로는 활성화되지 않습니다. 현재 Android 서비스 선언은 `android/app/src/main/AndroidManifest.xml`에 있으며, 네이티브 코드 변경 후에는 반드시 Development Build를 다시 설치해야 합니다.
+
+알림은 선택한 패키지와 일치하는 경우에만 처리됩니다. `결제거부`, `승인거부`, `잔액부족`은 제외하고 `입금`, `취소`는 수입, `결제`, `출금`은 지출로 기록합니다. 금액은 `1,234원` 형식만 자동 인식하며 가맹점명은 알림 본문의 첫 번째 비금융 텍스트를 사용합니다.
+
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
 ## Get started
