@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Modal,
+  AppState,
   NativeModules,
   Pressable,
   RefreshControl,
@@ -34,9 +35,11 @@ export default function NotificationLogsScreen() {
   const [logs, setLogs] = useState<NotificationLog[]>([]);
   const [detailLog, setDetailLog] = useState<NotificationLog | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const loadingRef = useRef(false);
 
   const loadLogs = async () => {
-    if (!notificationLogModule) return;
+    if (!notificationLogModule || loadingRef.current) return;
+    loadingRef.current = true;
     setRefreshing(true);
     try {
       const rawLogs = await notificationLogModule.getLogs();
@@ -48,14 +51,33 @@ export default function NotificationLogsScreen() {
     } catch (error) {
       console.warn('Notification logs load failed:', error);
     } finally {
+      loadingRef.current = false;
       setRefreshing(false);
     }
   };
 
   useEffect(() => {
-    void loadLogs();
-    const interval = setInterval(() => void loadLogs(), 3000);
-    return () => clearInterval(interval);
+    if (!notificationLogModule) return;
+    let interval: ReturnType<typeof setInterval> | undefined;
+    const startPolling = () => {
+      if (interval || AppState.currentState !== 'active') return;
+      void loadLogs();
+      interval = setInterval(() => void loadLogs(), 15000);
+    };
+    const stopPolling = () => {
+      if (!interval) return;
+      clearInterval(interval);
+      interval = undefined;
+    };
+    const appStateSubscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') startPolling();
+      else stopPolling();
+    });
+    startPolling();
+    return () => {
+      stopPolling();
+      appStateSubscription.remove();
+    };
   }, []);
 
   return (

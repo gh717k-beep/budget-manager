@@ -1,15 +1,11 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
 import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
 import { useAutoTransactionSync } from '@/hooks/useAutoTransactionSync';
-
-SplashScreen.preventAutoHideAsync();
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -18,7 +14,6 @@ export default function TabLayout() {
       <SafeAreaProvider>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <StatusBar style="dark" />
-          <AnimatedSplashOverlay />
           <AutomaticTransactionSync />
           <AppTabs />
         </ThemeProvider>
@@ -38,6 +33,8 @@ async function initializeDatabase(database: { execAsync: (source: string) => Pro
       CREATE TABLE IF NOT EXISTS transactions (id TEXT PRIMARY KEY NOT NULL, date TEXT NOT NULL, type TEXT NOT NULL, amount REAL NOT NULL, category_tag TEXT NOT NULL, note TEXT);
       CREATE TABLE IF NOT EXISTS budgets (year_month TEXT PRIMARY KEY NOT NULL, payday INTEGER, display_mode TEXT, total_income REAL NOT NULL, living_percent REAL NOT NULL, savings_percent REAL NOT NULL, custom_percent REAL NOT NULL);
       CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS transactions_date_idx ON transactions(date);
+      DELETE FROM transactions WHERE (id = '1' AND note = '점심 식사') OR (id = '2' AND note = '버스 충전') OR (id = '3' AND note = '월급');
     `);
   } catch (error) {
     console.warn('SQLite initialization failed:', error);

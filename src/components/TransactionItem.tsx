@@ -81,14 +81,14 @@ export function TransactionItem({ transaction, onEdit, onDelete }: TransactionIt
 
 const styles = StyleSheet.create({
   itemContainer: { position: 'relative' },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingRight: 48, borderBottomWidth: 1, borderBottomColor: Palette.line },
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingRight: 8, borderBottomWidth: 1, borderBottomColor: Palette.line },
   pressed: { opacity: 0.65 },
   icon: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   details: { flex: 1, marginLeft: 12 },
   category: { color: Palette.ink, fontSize: 15, fontWeight: '800' },
   note: { color: Palette.muted, fontSize: 12, marginTop: 3 },
-  moneyBox: { alignItems: 'flex-end', gap: 3 },
-  money: { fontSize: 14, fontWeight: '800' },
+  moneyBox: { width: 112, marginLeft: 8, alignItems: 'flex-end', gap: 3 },
+  money: { fontSize: 14, fontWeight: '800', textAlign: 'right' },
   deleteButton: { position: 'absolute', top: 0, bottom: 0, width: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
   deleteLeft: { left: 0 },
   deleteRight: { right: 0 },
