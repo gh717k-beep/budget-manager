@@ -25,9 +25,6 @@ export default function AppTabs() {
           <TabTrigger name="notification-logs" href="/notification-logs" asChild>
             <TabButton>알림 로그</TabButton>
           </TabTrigger>
-          <TabTrigger name="app-selection" href="/app-selection" asChild>
-            <TabButton>앱 선택</TabButton>
-          </TabTrigger>
         </CustomTabList>
       </TabList>
     </Tabs>

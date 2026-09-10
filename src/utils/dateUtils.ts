@@ -51,3 +51,13 @@ export const formatDateLabel = (dateString: string) => {
   const date = new Date(`${dateString}T00:00:00`);
   return `${date.getMonth() + 1}월 ${date.getDate()}일 ${['일', '월', '화', '수', '목', '금', '토'][date.getDay()]}`;
 };
+
+const fixedPublicHolidays = new Set(['01-01', '03-01', '05-05', '06-06', '08-15', '10-03', '10-09', '12-25']);
+const additionalPublicHolidays: Record<string, string[]> = {
+  '2026': ['02-16', '02-17', '02-18', '03-02', '08-17', '09-24', '09-25', '09-26', '10-05'],
+};
+
+export const isKoreanPublicHoliday = (dateString: string) => {
+  const [year, month, day] = dateString.split('-');
+  return fixedPublicHolidays.has(`${month}-${day}`) || additionalPublicHolidays[year]?.includes(`${month}-${day}`) === true;
+};

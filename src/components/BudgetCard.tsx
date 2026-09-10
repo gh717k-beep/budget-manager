@@ -28,7 +28,7 @@ export function BudgetCard({ target, spent, dailyBudget, displayMode = 'remainin
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: Palette.sageDark, borderRadius: 24, padding: 22, gap: 17 },
+  card: { backgroundColor: Palette.sageDark, borderRadius: 24, padding: 22, gap: 17, shadowColor: Palette.ink, shadowOpacity: 0.2, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   label: { color: Palette.blueSoft, fontSize: 13, fontWeight: '700' },
   amountRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: 7 },

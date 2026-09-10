@@ -3,6 +3,7 @@ import { InstalledApp } from '@/types/installedApp';
 
 interface InstalledAppsNativeModule {
   getInstalledApps: () => Promise<string>;
+  getInstalledAppsForPackages?: (packagesJson: string) => Promise<string>;
   setSelectedPackages: (packagesJson: string) => Promise<void>;
 }
 
@@ -16,4 +17,10 @@ export async function loadInstalledApps(): Promise<InstalledApp[]> {
 
 export async function saveSelectedPackages(packages: string[]): Promise<void> {
   if (Platform.OS === 'android') await nativeModule?.setSelectedPackages(JSON.stringify(packages));
+}
+
+export async function loadSelectedApps(packages: string[]): Promise<InstalledApp[]> {
+  if (Platform.OS !== 'android' || !nativeModule?.getInstalledAppsForPackages || !packages.length) return [];
+  const raw = await nativeModule.getInstalledAppsForPackages(JSON.stringify(packages));
+  return JSON.parse(raw) as InstalledApp[];
 }

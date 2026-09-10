@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 
 import { Palette } from '@/constants/colors';
+import AppSelectionScreen from '@/screens/AppSelectionScreen';
 import { getNotificationPaymentSummary } from '@/utils/universalPaymentParser';
 
 interface NotificationLog {
@@ -34,6 +35,7 @@ const notificationLogModule = NativeModules.NotificationLogModule as {
 export default function NotificationLogsScreen() {
   const [logs, setLogs] = useState<NotificationLog[]>([]);
   const [detailLog, setDetailLog] = useState<NotificationLog | null>(null);
+  const [showAppSelection, setShowAppSelection] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const loadingRef = useRef(false);
 
@@ -86,13 +88,18 @@ export default function NotificationLogsScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadLogs} />}>
         <View style={styles.header}>
-          <View>
+          <View style={styles.headerCopy}>
             <Text style={styles.title}>알림 로그</Text>
             <Text style={styles.subtitle}>수집된 알림을 확인하고 기록할 항목을 선택하세요.</Text>
           </View>
-          <Pressable onPress={() => notificationLogModule?.openNotificationAccessSettings()} style={styles.settingsButton}>
-            <Text style={styles.settingsButtonText}>권한 설정</Text>
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable onPress={() => setShowAppSelection(true)} style={styles.appButton}>
+              <Text style={styles.settingsButtonText}>앱 선택</Text>
+            </Pressable>
+            <Pressable onPress={() => notificationLogModule?.openNotificationAccessSettings()} style={styles.settingsButton}>
+              <Text style={styles.settingsButtonText}>권한 설정</Text>
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.notice}>
@@ -131,6 +138,17 @@ export default function NotificationLogsScreen() {
           );
         })}
       </ScrollView>
+      <Modal visible={showAppSelection} animationType="slide" onRequestClose={() => setShowAppSelection(false)}>
+        <View style={styles.appSelectionModal}>
+          <View style={styles.appSelectionHeader}>
+            <Text style={styles.appSelectionTitle}>앱 선택</Text>
+            <Pressable onPress={() => setShowAppSelection(false)} hitSlop={8}>
+              <Text style={styles.close}>닫기</Text>
+            </Pressable>
+          </View>
+          <AppSelectionScreen />
+        </View>
+      </Modal>
       <Modal visible={detailLog !== null} animationType="slide" transparent onRequestClose={() => setDetailLog(null)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.detailModal}>
@@ -157,11 +175,17 @@ export default function NotificationLogsScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Palette.canvas },
   content: { padding: 20, paddingTop: 28, paddingBottom: 40, gap: 12 },
-  header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
+  header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
+  headerCopy: { flex: 1, minWidth: 0 },
   title: { color: Palette.ink, fontSize: 28, fontWeight: '900' },
   subtitle: { color: Palette.muted, fontSize: 13, marginTop: 6 },
-  settingsButton: { backgroundColor: Palette.sageDark, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
-  settingsButtonText: { color: Palette.white, fontSize: 12, fontWeight: '800' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  appButton: { backgroundColor: Palette.amber, borderRadius: 12, paddingHorizontal: 9, paddingVertical: 10, flexShrink: 1 },
+  settingsButton: { backgroundColor: Palette.sageDark, borderRadius: 12, paddingHorizontal: 9, paddingVertical: 10, flexShrink: 1 },
+  settingsButtonText: { color: Palette.white, fontSize: 11, fontWeight: '800' },
+  appSelectionModal: { flex: 1, backgroundColor: Palette.canvas },
+  appSelectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 18, paddingBottom: 4 },
+  appSelectionTitle: { color: Palette.ink, fontSize: 20, fontWeight: '900' },
   notice: { backgroundColor: Palette.mint, borderRadius: 16, padding: 14, gap: 5 },
   noticeTitle: { color: Palette.sageDark, fontWeight: '900' },
   noticeText: { color: Palette.ink, fontSize: 12, lineHeight: 18 },
