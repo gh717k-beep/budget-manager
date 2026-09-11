@@ -82,6 +82,12 @@ export default function DashboardScreen() {
   const [datePickerSelection, setDatePickerSelection] = useState<string | null>(
     null,
   );
+  const [expandedTypes, setExpandedTypes] = useState<Set<"INCOME" | "EXPENSE">>(
+    new Set(),
+  );
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
+    new Set(),
+  );
 
   useEffect(() => {
     const subscription = DeviceEventEmitter.addListener(
@@ -102,6 +108,7 @@ export default function DashboardScreen() {
   const dayTransactions = transactions
     .filter((item) => item.date === selectedDate)
     .sort((first, second) => second.id.localeCompare(first.id));
+  const visibleDayTransactions = dayTransactions.filter((item) => item.amount > 0);
   const spent = sumTransactionsInRange(
     transactions,
     "EXPENSE",
@@ -135,6 +142,11 @@ export default function DashboardScreen() {
       );
     }
   }, [budget.payday, days, yearMonth]);
+
+  useEffect(() => {
+    setExpandedTypes(new Set());
+    setExpandedCategories(new Set());
+  }, [selectedDate]);
 
   const changeMonth = (amount: number) => {
     const nextMonth = shiftMonth(yearMonth, amount);
@@ -239,7 +251,10 @@ export default function DashboardScreen() {
           <Pressable
             accessibilityLabel="데이터 새로고침"
             hitSlop={10}
-            onPress={reload}
+            onPress={() => {
+              reload();
+              DeviceEventEmitter.emit('budget-book-sync-requested');
+            }}
             style={({ pressed }) => [
               {
                 width: 42,
@@ -383,19 +398,175 @@ export default function DashboardScreen() {
             },
           ]}
         >
-          {dayTransactions.length ? (
-            dayTransactions.map((item) => (
-              <TransactionItem
-                key={item.id}
-                transaction={item}
-                onEdit={() => {
-                  setEditing(item);
-                  setModalMode("transaction");
-                }}
-                onDelete={() => removeTransaction(item.id)}
-              />
-            ))
-          ) : (
+          {(["INCOME", "EXPENSE"] as const).map((type) => {
+              const typeTransactions = visibleDayTransactions.filter(
+                (item) => item.type === type && item.amount > 0,
+              );
+              if (!typeTransactions.length) return null;
+              const typeTotal = typeTransactions.reduce(
+                (sum, item) => sum + item.amount,
+                0,
+              );
+              const categories = typeTransactions.reduce<
+                Record<string, Transaction[]>
+              >((grouped, item) => {
+                (grouped[item.categoryTag] ??= []).push(item);
+                return grouped;
+              }, {});
+              const sortedCategories = Object.entries(categories).sort(
+                ([, firstTransactions], [, secondTransactions]) =>
+                  secondTransactions.reduce((sum, item) => sum + item.amount, 0) -
+                  firstTransactions.reduce((sum, item) => sum + item.amount, 0),
+              );
+              const isTypeExpanded = expandedTypes.has(type);
+
+              return (
+                <View key={type} style={styles.summaryGroup}>
+                  <Pressable
+                    onPress={() => {
+                      setExpandedTypes((current) => {
+                        const next = new Set(current);
+                        if (isTypeExpanded) {
+                          next.delete(type);
+                        } else {
+                          next.add(type);
+                        }
+                        return next;
+                      });
+                    }}
+                    style={({ pressed }) => [
+                      styles.summaryGroupButton,
+                      pressed && { opacity: 0.65 },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.summaryGroupIcon,
+                        {
+                          backgroundColor:
+                            type === "INCOME"
+                              ? Palette.blueSoft
+                              : Palette.coralSoft,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={{
+                          color:
+                            type === "INCOME" ? Palette.blue : Palette.coral,
+                          fontSize: 18,
+                          fontWeight: "800",
+                        }}
+                      >
+                        {type === "INCOME" ? "+" : "-"}
+                      </Text>
+                    </View>
+                    <View style={styles.summaryGroupDetails}>
+                      <Text style={styles.summaryGroupLabel}>
+                        {type === "INCOME" ? "수입" : "지출"}
+                      </Text>
+                      <Text style={styles.summaryGroupCount}>
+                        {typeTransactions.length}건
+                      </Text>
+                    </View>
+                    <Text
+                      style={[
+                        styles.summaryGroupAmount,
+                        {
+                          color:
+                            type === "INCOME" ? Palette.blue : Palette.coral,
+                        },
+                      ]}
+                    >
+                      {type === "INCOME" ? "+" : "-"}
+                      {formatCurrency(typeTotal)}
+                    </Text>
+                    <Text style={styles.disclosure}>
+                      {isTypeExpanded ? "⌃" : "⌄"}
+                    </Text>
+                  </Pressable>
+                  {isTypeExpanded && (
+                    <View style={styles.categoryList}>
+                      {sortedCategories.map(
+                        ([category, categoryTransactions]) => {
+                          const categoryTotal = categoryTransactions.reduce(
+                            (sum, item) => sum + item.amount,
+                            0,
+                          );
+                          const categoryKey = `${type}:${category}`;
+                          const isCategoryExpanded = expandedCategories.has(
+                            categoryKey,
+                          );
+                          return (
+                            <View key={categoryKey}>
+                              <Pressable
+                                onPress={() => {
+                                  setExpandedCategories((current) => {
+                                    const next = new Set(current);
+                                    if (isCategoryExpanded) {
+                                      next.delete(categoryKey);
+                                    } else {
+                                      next.add(categoryKey);
+                                    }
+                                    return next;
+                                  });
+                                }}
+                                style={({ pressed }) => [
+                                  styles.categoryRow,
+                                  pressed && { opacity: 0.65 },
+                                ]}
+                              >
+                                <View style={styles.categoryNameBox}>
+                                  <Text style={styles.categoryName}>
+                                    {category}
+                                  </Text>
+                                  <Text style={styles.categoryCount}>
+                                    {categoryTransactions.length}건
+                                  </Text>
+                                </View>
+                                <Text
+                                  style={[
+                                    styles.categoryAmount,
+                                    {
+                                      color:
+                                        type === "INCOME"
+                                          ? Palette.blue
+                                          : Palette.ink,
+                                    },
+                                  ]}
+                                >
+                                  {formatCurrency(categoryTotal)}
+                                </Text>
+                                <Text style={styles.disclosure}>
+                                  {isCategoryExpanded ? "⌃" : "⌄"}
+                                </Text>
+                              </Pressable>
+                              {isCategoryExpanded &&
+                                [...categoryTransactions]
+                                  .sort(
+                                    (first, second) => second.amount - first.amount,
+                                  )
+                                  .map((item) => (
+                                    <TransactionItem
+                                      key={item.id}
+                                      transaction={item}
+                                      onEdit={() => {
+                                        setEditing(item);
+                                        setModalMode("transaction");
+                                      }}
+                                      onDelete={() => removeTransaction(item.id)}
+                                    />
+                                  ))}
+                            </View>
+                          );
+                        },
+                      )}
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+          {!visibleDayTransactions.length && (
             <View style={styles.empty}>
               <Text style={styles.emptyTitle}>아직 기록이 없어요</Text>
               <Text style={appStyles.muted}>
@@ -866,8 +1037,11 @@ function TransactionForm({
   onSave: () => void;
   onClose: () => void;
 }) {
-  const categories =
+  const baseCategories =
     value.type === "EXPENSE" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
+  const categories = baseCategories.includes(value.categoryTag)
+    ? baseCategories
+    : [value.categoryTag, ...baseCategories];
   return (
     <>
       <ModalHeader
@@ -1129,6 +1303,45 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Palette.line,
   },
+  summaryGroup: { borderBottomWidth: 1, borderBottomColor: Palette.line },
+  summaryGroupButton: {
+    minHeight: 70,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+  summaryGroupIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  summaryGroupDetails: { flex: 1, marginLeft: 12 },
+  summaryGroupLabel: { color: Palette.ink, fontSize: 15, fontWeight: "800" },
+  summaryGroupCount: { color: Palette.muted, fontSize: 12, marginTop: 3 },
+  summaryGroupAmount: { fontSize: 14, fontWeight: "800", textAlign: "right" },
+  disclosure: {
+    width: 24,
+    marginLeft: 8,
+    color: Palette.muted,
+    fontSize: 18,
+    fontWeight: "800",
+    textAlign: "right",
+  },
+  categoryList: { paddingLeft: 12 },
+  categoryRow: {
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 9,
+    borderTopWidth: 1,
+    borderTopColor: Palette.line,
+  },
+  categoryNameBox: { flex: 1 },
+  categoryName: { color: Palette.ink, fontSize: 14, fontWeight: "700" },
+  categoryCount: { color: Palette.muted, fontSize: 11, marginTop: 2 },
+  categoryAmount: { fontSize: 13, fontWeight: "800" },
   empty: { alignItems: "center", paddingVertical: 35, gap: 7 },
   emptyTitle: { color: Palette.ink, fontWeight: "800", fontSize: 15 },
   fab: {

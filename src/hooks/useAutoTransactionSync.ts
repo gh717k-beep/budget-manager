@@ -2,12 +2,18 @@ import { useSQLiteContext } from 'expo-sqlite';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useRef } from 'react';
 import { AppState, DeviceEventEmitter, Platform } from 'react-native';
-import { acknowledgeTransactions, readNotificationLogs, readPendingTransactions } from '@/services/notificationListener';
+import { readNotificationLogs } from '@/services/notificationListener';
+import { normalizeNotificationMemo, parsePaymentWithAI, readAiClassifications, readManualTags, saveAiClassifications } from '@/services/aiParser';
 import { ParsedNotificationTransaction } from '@/types/installedApp';
+import { toDateString } from '@/utils/dateUtils';
 import { parsePaymentNotification } from '@/utils/universalPaymentParser';
 
 const processedNotificationIdsKey = '@project1/processed-notification-ids';
 const maxProcessedNotificationIds = 2000;
+
+interface SyncTransaction extends ParsedNotificationTransaction {
+  categoryTag?: string;
+}
 
 function getAutomaticCategory(transaction: ParsedNotificationTransaction): string {
   if (transaction.sourceText.includes('취소')) return '입금';
@@ -29,7 +35,6 @@ export function useAutoTransactionSync(onSynced?: () => void): void {
 
     let cancelled = false;
     let processedIdsLoaded = false;
-    let interval: ReturnType<typeof setInterval> | undefined;
     const loadProcessedIds = async () => {
       if (processedIdsLoaded) return;
       const raw = await AsyncStorage.getItem(processedNotificationIdsKey);
@@ -45,13 +50,54 @@ export function useAutoTransactionSync(onSynced?: () => void): void {
       try {
         await loadProcessedIds();
         if (cancelled) return;
-        const pending = await readPendingTransactions();
-        const logTransactions: ParsedNotificationTransaction[] = pending.length ? [] : (await readNotificationLogs())
-          .filter((log) => !processedLogIdsRef.current.has(log.id))
-          .map((log) => parsePaymentNotification(log))
-          .filter((transaction): transaction is ParsedNotificationTransaction => transaction !== null);
-        const transactions = [...pending, ...logTransactions];
-        if (cancelled || !transactions.length) return;
+        const logTransactions: SyncTransaction[] = [];
+        const completedLogIds: string[] = [];
+        const classifications = await readAiClassifications();
+        const manualTags = await readManualTags();
+        const logs = await readNotificationLogs();
+        for (const log of logs.filter((item) => !processedLogIdsRef.current.has(item.id))) {
+          const manualTag = manualTags[normalizeNotificationMemo(log)];
+          const aiResult = log.aiResult ?? (manualTag && !classifications[log.id]
+            ? null
+            : await parsePaymentWithAI(log));
+          if (aiResult) {
+            classifications[log.id] = { result: aiResult, source: 'ai' };
+            completedLogIds.push(log.id);
+          }
+          if (aiResult?.isPayment && aiResult.type !== 'IGNORE' && aiResult.amount > 0) {
+            logTransactions.push({
+              id: log.id,
+              date: toDateString(new Date(log.postedAt)),
+              type: aiResult.type,
+              amount: aiResult.amount,
+              merchant: aiResult.place,
+              packageName: log.packageName,
+              appName: log.appName,
+              sourceText: `${log.title} ${log.text}`,
+              categoryTag: manualTag || aiResult.categoryTag,
+            });
+          } else {
+            const fallback = parsePaymentNotification(log);
+            if (fallback) {
+              if (!aiResult) completedLogIds.push(log.id);
+              classifications[log.id] = {
+                result: {
+                  isPayment: true,
+                  amount: fallback.amount,
+                  type: fallback.type,
+                  transactionKind: 'PAYMENT',
+                  place: fallback.merchant || '',
+                  categoryTag: getAutomaticCategory(fallback),
+                },
+                source: 'fallback',
+              };
+              logTransactions.push({ ...fallback, categoryTag: manualTag || getAutomaticCategory(fallback) });
+            }
+          }
+        }
+        if (completedLogIds.length) await saveAiClassifications(classifications);
+        const transactions: SyncTransaction[] = logTransactions;
+        if (cancelled) return;
         for (const transaction of transactions) {
           if (cancelled) return;
           await database.runAsync(
@@ -60,14 +106,13 @@ export function useAutoTransactionSync(onSynced?: () => void): void {
             transaction.date,
             transaction.type,
             transaction.amount,
-            getAutomaticCategory(transaction),
-            `${transaction.appName} 알림 자동 기록${transaction.merchant ? ` · ${transaction.merchant}` : ''}`,
+            transaction.categoryTag || getAutomaticCategory(transaction),
+            transaction.merchant || null,
           );
         }
         if (cancelled) return;
-        pending.forEach((transaction) => processedLogIdsRef.current.add(transaction.id));
-        logTransactions.forEach((transaction) => processedLogIdsRef.current.add(transaction.id));
-        if (logTransactions.length) {
+        completedLogIds.forEach((id) => processedLogIdsRef.current.add(id));
+        if (completedLogIds.length) {
           const processedIds = [...processedLogIdsRef.current].slice(-maxProcessedNotificationIds);
           processedLogIdsRef.current = new Set(processedIds);
           await AsyncStorage.setItem(
@@ -75,7 +120,6 @@ export function useAutoTransactionSync(onSynced?: () => void): void {
             JSON.stringify(processedIds),
           );
         }
-        await acknowledgeTransactions(pending.map((transaction) => transaction.id));
         DeviceEventEmitter.emit('budget-book-transactions-synced');
         onSyncedRef.current?.();
       } catch (error) {
@@ -84,25 +128,12 @@ export function useAutoTransactionSync(onSynced?: () => void): void {
         syncingRef.current = false;
       }
     };
-    const startPolling = () => {
-      if (interval || AppState.currentState !== 'active') return;
-      void sync();
-      interval = setInterval(() => void sync(), 15000);
-    };
-    const stopPolling = () => {
-      if (!interval) return;
-      clearInterval(interval);
-      interval = undefined;
-    };
-    const appStateSubscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') startPolling();
-      else stopPolling();
+    const syncRequestSubscription = DeviceEventEmitter.addListener('budget-book-sync-requested', () => {
+      if (AppState.currentState === 'active') void sync();
     });
-    startPolling();
     return () => {
       cancelled = true;
-      stopPolling();
-      appStateSubscription.remove();
+      syncRequestSubscription.remove();
     };
   }, [database]);
 }

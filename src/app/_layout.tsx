@@ -34,6 +34,9 @@ async function initializeDatabase(database: { execAsync: (source: string) => Pro
       CREATE TABLE IF NOT EXISTS budgets (year_month TEXT PRIMARY KEY NOT NULL, payday INTEGER, display_mode TEXT, total_income REAL NOT NULL, living_percent REAL NOT NULL, savings_percent REAL NOT NULL, custom_percent REAL NOT NULL);
       CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS transactions_date_idx ON transactions(date);
+      UPDATE transactions
+      SET note = substr(note, instr(note, ' · ') + 3)
+      WHERE note LIKE '% 알림 자동 기록 · %';
       DELETE FROM transactions WHERE (id = '1' AND note = '점심 식사') OR (id = '2' AND note = '버스 충전') OR (id = '3' AND note = '월급');
     `);
   } catch (error) {
