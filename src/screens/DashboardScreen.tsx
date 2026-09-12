@@ -22,11 +22,9 @@ import {
   toYearMonth,
 } from "@/utils/dateUtils";
 import { SymbolView } from "expo-symbols";
-import { DeviceEventEmitter } from "react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Animated,
-  Easing,
+  Animated, DeviceEventEmitter, Easing,
   KeyboardAvoidingView,
   Modal,
   PanResponder,
@@ -37,7 +35,7 @@ import {
   Text,
   TextInput,
   useWindowDimensions,
-  View,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
