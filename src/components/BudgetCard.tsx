@@ -3,25 +3,26 @@ import { Palette } from '@/constants/colors';
 import { formatCurrency } from '@/utils/calculator';
 import { ProgressBar } from './ProgressBar';
 
-interface BudgetCardProps { target: number; spent: number; dailyBudget: number; displayMode?: 'remaining' | 'daily'; onPress?: () => void; }
+interface BudgetCardProps { target: number; spent: number; dailySpent: number; dailyBudget: number; displayMode?: 'remaining' | 'daily'; onPress?: () => void; }
 
-export function BudgetCard({ target, spent, dailyBudget, displayMode = 'remaining', onPress }: BudgetCardProps) {
+export function BudgetCard({ target, spent, dailySpent, dailyBudget, displayMode = 'remaining', onPress }: BudgetCardProps) {
   const ratio = target > 0 ? spent / target : 0;
-  const percent = Math.round(ratio * 100);
+  const dailyRatio = dailyBudget > 0 ? dailySpent / dailyBudget : 0;
+  const displayRatio = displayMode === 'daily' ? dailyRatio : ratio;
+  const footerRatio = displayMode === 'daily' ? ratio : dailyRatio;
   const remaining = Math.max(target - spent, 0);
   return (
     <Pressable onPress={onPress} style={styles.card}>
       <View style={styles.header}>
         <View>
           <Text style={styles.label}>이번 달 생활비</Text>
-          {displayMode === 'daily' ? <View style={styles.dailyAmountRow}><Text style={styles.amount}>{formatCurrency(dailyBudget)}</Text><Text style={styles.dailySuffix}>/일</Text></View> : <View style={styles.amountRow}><Text style={styles.amount}>{remaining.toLocaleString('ko-KR')}</Text><Text style={styles.amountDivider}> / </Text><Text style={styles.targetAmount}>{target.toLocaleString('ko-KR')}</Text></View>}
+          {displayMode === 'daily' ? <View style={styles.dailyAmountRow}><Text style={styles.amount}>{formatCurrency(dailySpent)}</Text><Text style={styles.amountDivider}> / </Text><Text style={styles.targetAmount}>{formatCurrency(dailyBudget)}</Text></View> : <View style={styles.amountRow}><Text style={styles.amount}>{formatCurrency(remaining)}</Text><Text style={styles.amountDivider}> / </Text><Text style={styles.targetAmount}>{formatCurrency(target)}</Text></View>}
         </View>
-        <Text style={styles.percent}>{percent}%</Text>
+        <Text style={styles.percent}>{Math.round(displayRatio * 100)}%</Text>
       </View>
-      <ProgressBar ratio={ratio} />
+      <ProgressBar ratio={displayRatio} />
       <View style={styles.footer}>
-        <Text style={styles.caption}>목표 {formatCurrency(target)}</Text>
-        {displayMode === 'daily' ? <Text style={styles.caption}>{`남은 금액 ${remaining.toLocaleString('ko-KR')} / 목표 ${target.toLocaleString('ko-KR')}`}</Text> : <View style={styles.footerDaily}><Text style={styles.caption}>{formatCurrency(dailyBudget)}</Text><Text style={styles.dailySuffix}>/일</Text></View>}
+        {displayMode === 'daily' ? <Text style={styles.caption}>{`${formatCurrency(remaining)} / ${formatCurrency(target)} (${Math.round(footerRatio * 100)}%)`}</Text> : <View style={styles.footerDaily}><Text style={styles.caption}>{formatCurrency(dailySpent)} / {formatCurrency(dailyBudget)} ({Math.round(footerRatio * 100)}%)</Text></View>}
       </View>
     </Pressable>
   );

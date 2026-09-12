@@ -70,6 +70,7 @@ export default function DashboardScreen() {
   const isCardAnimating = useRef(false);
   const daysScrollRef = useRef<ScrollView>(null);
   const [yearMonth, setYearMonth] = useState(initialMonth);
+  const [currentDate, setCurrentDate] = useState(() => toDateString(new Date()));
   const [budget, setBudget] = useState<MonthlyBudget>(() =>
     getBudget(initialMonth),
   );
@@ -109,6 +110,19 @@ export default function DashboardScreen() {
     .filter((item) => item.date === selectedDate)
     .sort((first, second) => second.id.localeCompare(first.id));
   const visibleDayTransactions = dayTransactions.filter((item) => item.amount > 0);
+  const selectedDateSpent = dayTransactions
+    .filter((item) => item.type === "EXPENSE" && item.amount > 0)
+    .reduce((sum, item) => sum + item.amount, 0);
+  const selectedDateIndex = cycleDates.indexOf(selectedDate);
+  const spentBeforeSelectedDate =
+    selectedDateIndex > 0
+      ? sumTransactionsInRange(
+          transactions,
+          "EXPENSE",
+          payCycle.start,
+          cycleDates[selectedDateIndex - 1],
+        )
+      : 0;
   const spent = sumTransactionsInRange(
     transactions,
     "EXPENSE",
@@ -116,14 +130,13 @@ export default function DashboardScreen() {
     payCycle.end,
   );
   const amounts = getBudgetAmounts(budget);
-  const todayString = toDateString(new Date());
-  const isTodayInPayCycle =
-    todayString >= payCycle.start && todayString <= payCycle.end;
-  const budgetDays = isTodayInPayCycle
-    ? getDatesInRange(todayString, payCycle.end).length
-    : getDatesInRange(payCycle.start, payCycle.end).length;
+  const budgetDays = getDatesInRange(selectedDate, payCycle.end).length;
+  const remainingBudgetAtSelectedDate = Math.max(
+    amounts.living - spentBeforeSelectedDate,
+    0,
+  );
   const dailyBudget =
-    Math.max(amounts.living - spent, 0) / Math.max(budgetDays, 1);
+    remainingBudgetAtSelectedDate / Math.max(budgetDays, 1);
   const days = useMemo(
     () => [...cycleDates].sort((first, second) => first.localeCompare(second)),
     [cycleDates],
@@ -252,6 +265,7 @@ export default function DashboardScreen() {
             accessibilityLabel="데이터 새로고침"
             hitSlop={10}
             onPress={() => {
+              setCurrentDate(toDateString(new Date()));
               reload();
               DeviceEventEmitter.emit('budget-book-sync-requested');
             }}
@@ -293,6 +307,7 @@ export default function DashboardScreen() {
           <BudgetCard
             target={amounts.living}
             spent={spent}
+            dailySpent={selectedDateSpent}
             dailyBudget={dailyBudget}
             displayMode={budget.displayMode}
             onPress={openBudget}
@@ -369,7 +384,7 @@ export default function DashboardScreen() {
             renderDay(
               date,
               selectedDate,
-              initialDate,
+              currentDate,
               transactions,
               setSelectedDate,
             ),
@@ -728,7 +743,7 @@ export default function DashboardScreen() {
                   renderDay(
                     date,
                     selectedDate,
-                    initialDate,
+                    currentDate,
                     transactions,
                     (nextDate) => {
                       if (datePickerSelection === nextDate) {
@@ -791,13 +806,13 @@ export default function DashboardScreen() {
 function renderDay(
   date: string,
   selectedDate: string,
-  initialDate: string,
+  currentDate: string,
   transactions: Transaction[],
   onSelect: (date: string) => void,
   compact = false,
 ) {
   const active = date === selectedDate;
-  const isToday = date === initialDate;
+  const isToday = date === currentDate;
   const dateObject = new Date(`${date}T00:00:00`);
   const dayTransactions = transactions.filter((item) => item.date === date);
   const dayExpense = dayTransactions
@@ -858,7 +873,7 @@ function renderDay(
               active && styles.activeText,
             ]}
           >
-            -{dayExpense.toLocaleString("ko-KR")}
+            -{Math.round(dayExpense).toLocaleString("ko-KR")}
           </Text>
         )}
         {dayIncome > 0 && (
@@ -868,7 +883,7 @@ function renderDay(
               active && styles.activeText,
             ]}
           >
-            +{dayIncome.toLocaleString("ko-KR")}
+            +{Math.round(dayIncome).toLocaleString("ko-KR")}
           </Text>
         )}
       </View>
@@ -1129,7 +1144,7 @@ function BudgetForm({
   const paydayOptions = Array.from({ length: 30 }, (_, index) =>
     String(index + 1),
   );
-  const displayOptions = ["남은 금액 / 목표 금액", "하루 사용 가능 금액"];
+  const displayOptions = ["전체 생활비", "하루 생활비"];
   const displayValue =
     value.displayMode === "daily" ? displayOptions[1] : displayOptions[0];
   return (

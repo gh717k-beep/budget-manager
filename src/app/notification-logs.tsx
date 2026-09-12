@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 
 import { Palette } from '@/constants/colors';
+import { formatCurrency } from '@/utils/calculator';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '@/constants/categories';
 import AppSelectionScreen from '@/screens/AppSelectionScreen';
 import { getAiRetryAfterSeconds, getGeminiApiKey, normalizeNotificationMemo, parsePaymentWithAI, readAiClassifications, readManualTags, saveAiClassifications, saveGeminiApiKey, saveManualTag, type AiClassificationRecord } from '@/services/aiParser';
@@ -189,9 +190,9 @@ export default function NotificationLogsScreen() {
                   <Text style={styles.date}>{new Date(log.postedAt).toLocaleString('ko-KR')}</Text>
                 </View>
                 <View style={styles.summaryRow}>
-                  <Text style={[styles.typeLabel, { color: typeColor }]}>{summary ? `${summaryLabel} - ${summary.amount !== undefined ? `${summary.amount.toLocaleString('ko-KR')}원` : '금액 미감지'}` : '금융 키워드 미감지'}</Text>
+                  <Text style={[styles.typeLabel, { color: typeColor }]}>{summary ? `${summaryLabel} - ${summary.amount !== undefined ? formatCurrency(summary.amount) : '금액 미감지'}` : '금융 키워드 미감지'}</Text>
                 </View>
-                {classification && <View style={styles.aiClassification}><Text style={styles.aiLabel}>{classifications[log.id].source === 'ai' ? 'AI 분석' : '자동 분석'}</Text><Text style={styles.aiText}>태그 : {manualTag || classification.categoryTag}</Text><Text style={styles.aiText}>금액 : {classification.amount.toLocaleString('ko-KR')}원</Text><Text style={styles.aiText}>메모 : {classification.place || '내용 없음'}</Text></View>}
+                {classification && <View style={styles.aiClassification}><Text style={styles.aiLabel}>{classifications[log.id].source === 'ai' ? 'AI 분석' : '자동 분석'}</Text><Text style={styles.aiText}>태그 : {manualTag || classification.categoryTag}</Text><Text style={styles.aiText}>금액 : {formatCurrency(classification.amount)}</Text><Text style={styles.aiText}>메모 : {classification.place || '내용 없음'}</Text></View>}
                 <View style={styles.logActions}><Pressable onPress={(event) => { event.stopPropagation(); setManualTagLog(log); }} style={styles.manualTagButton}><Text style={styles.manualTagText}>{manualTag ? `수동 태그: ${manualTag}` : '수동 태그'}</Text></Pressable><Pressable disabled={reanalyzingId !== null} onPress={(event) => { event.stopPropagation(); void reanalyzeLog(log); }} style={[styles.logReanalyzeButton, reanalyzingId === log.id && styles.logReanalyzeDisabled]}><Text style={styles.logReanalyzeText}>{reanalyzingId === log.id ? '분석 중' : 'AI 재분석'}</Text></Pressable></View>
               </View>
             </Pressable>
@@ -244,7 +245,7 @@ export default function NotificationLogsScreen() {
             {detailLog && <>
               <Text style={styles.detailApp}>{detailLog.appName}</Text>
               <Text style={styles.detailDate}>{new Date(detailLog.postedAt).toLocaleString('ko-KR')}</Text>
-              {classifications[detailLog.id] && <View style={styles.detailClassification}><Text style={styles.aiLabel}>{classifications[detailLog.id].source === 'ai' ? 'AI 분석' : '자동 분석'}</Text><Text style={styles.detailClassificationText}>태그 : {classifications[detailLog.id].result.categoryTag}</Text><Text style={styles.detailClassificationText}>금액 : {classifications[detailLog.id].result.amount.toLocaleString('ko-KR')}원</Text><Text style={styles.detailClassificationText}>메모 : {classifications[detailLog.id].result.place || '내용 없음'}</Text></View>}
+              {classifications[detailLog.id] && <View style={styles.detailClassification}><Text style={styles.aiLabel}>{classifications[detailLog.id].source === 'ai' ? 'AI 분석' : '자동 분석'}</Text><Text style={styles.detailClassificationText}>태그 : {classifications[detailLog.id].result.categoryTag}</Text><Text style={styles.detailClassificationText}>금액 : {formatCurrency(classifications[detailLog.id].result.amount)}</Text><Text style={styles.detailClassificationText}>메모 : {classifications[detailLog.id].result.place || '내용 없음'}</Text></View>}
               <View style={styles.rawNotice}>
                 {!!detailLog.title && <Text style={styles.rawTitle}>{detailLog.title}</Text>}
                 <Text style={styles.rawText}>{detailLog.text || '(본문 없음)'}</Text>
